@@ -1,4 +1,4 @@
-from enum import StrEnum
+from enum import Enum, StrEnum
 
 
 class OrderPaymentStatus(StrEnum):
@@ -17,4 +17,11 @@ class PaymentStatus(StrEnum):
     PENDING = 'PENDING'
     PAID = 'PAID'
     REFUNDED = 'REFUNDED'
+    FAILED = 'FAILED'
+
+
+class BankPaymentStatus(str, Enum):
+    CREATED = 'CREATED'
+    PENDING = 'PENDING'
+    PAID = 'PAID'
     FAILED = 'FAILED'

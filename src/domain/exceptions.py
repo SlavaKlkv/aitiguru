@@ -71,6 +71,35 @@ class RefundNotAllowedException(DomainException):
     detail = 'Возврат платежа невозможен'
 
 
+class BankRequestException(DomainException):
+    """Некорректный запрос к API банка."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = 'Некорректный запрос к API банка'
+
+
+class BankPaymentNotFoundException(DomainException):
+    """Платёж не найден на стороне банка."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    detail = 'Платёж в банке не найден'
+
+    def __init__(self, bank_payment_id: str | None = None):
+        msg = (
+            'Платёж в банке не найден'
+            if bank_payment_id is None
+            else f'Платёж в банке с ID {bank_payment_id} не найден'
+        )
+        super().__init__(msg)
+
+
+class BankApiException(DomainException):
+    """Ошибка при обращении к внешнему API банка."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    detail = 'Ошибка при обращении к API банка'
+
+
 class PermissionDenied(DomainException):
     status_code = status.HTTP_403_FORBIDDEN
     detail = 'Доступ запрещён'

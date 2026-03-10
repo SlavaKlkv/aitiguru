@@ -40,5 +40,20 @@ async def refund_payment(
     uow: UnitOfWork = Depends(get_uow),
 ) -> PaymentResponse:
     payment = await service.refund(uow=uow, payment_id=payment_id)
+    return PaymentResponse.model_validate(payment)
 
+
+@router.post(
+    '/{payment_id}/check',
+    response_model=PaymentResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def check_payment(
+    payment_id: int,
+    uow: UnitOfWork = Depends(get_uow),
+) -> PaymentResponse:
+    """
+    Проверка статуса платежа в банке и синхронизация его состояния в системе
+    """
+    payment = await service.check_bank_payment(uow=uow, payment_id=payment_id)
     return PaymentResponse.model_validate(payment)
