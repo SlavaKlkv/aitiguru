@@ -8,8 +8,8 @@ class OrderPaymentStatus(StrEnum):
 
 
 class PaymentType(StrEnum):
-    CASH = 'CASH'
     ACQUIRING = 'ACQUIRING'
+    CASH = 'CASH'
 
 
 class PaymentStatus(StrEnum):

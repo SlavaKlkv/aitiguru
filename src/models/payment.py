@@ -35,13 +35,11 @@ class Payment(BaseModel):
 
     amount: Mapped[Decimal] = amount_column(nullable=False)
 
-    # тип платежа: наличные / эквайринг
-    type: Mapped[PaymentType] = mapped_column(
+    payment_type: Mapped[PaymentType] = mapped_column(
         Enum(PaymentType, name='payment_type'),
         nullable=False,
     )
 
-    # статус платежа
     status: Mapped[PaymentStatus] = mapped_column(
         Enum(PaymentStatus, name='payment_status'),
         default=PaymentStatus.CREATED,

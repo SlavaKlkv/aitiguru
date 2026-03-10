@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import Enum
+from sqlalchemy import CheckConstraint, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import BaseModel
@@ -13,14 +13,29 @@ from src.models.payment import Payment
 
 class Order(BaseModel):
     __tablename__ = 'orders'
+    __table_args__ = (
+        CheckConstraint(
+            'total_amount > 0', name='ck_orders_total_amount_gt_zero'
+        ),
+        CheckConstraint(
+            'paid_amount >= 0', name='ck_orders_paid_amount_gte_zero'
+        ),
+        CheckConstraint(
+            'paid_amount <= total_amount',
+            name='ck_orders_paid_amount_lte_total_amount',
+        ),
+    )
 
     # сумма заказа
     total_amount: Mapped[Decimal] = amount_column(nullable=False)
 
     # сколько уже оплачено
-    paid_amount: Mapped[Decimal] = amount_column(default=0, nullable=False)
+    paid_amount: Mapped[Decimal] = amount_column(
+        default=Decimal('0.00'),
+        server_default='0.00',
+        nullable=False,
+    )
 
-    # статус оплаты
     payment_status: Mapped[OrderPaymentStatus] = mapped_column(
         Enum(OrderPaymentStatus, name='order_payment_status'),
         default=OrderPaymentStatus.UNPAID,
