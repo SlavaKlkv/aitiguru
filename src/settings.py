@@ -12,9 +12,12 @@ class Settings(BaseSettings):
     user: str = Field(..., alias='POSTGRES_USER')
     password: str = Field(..., alias='POSTGRES_PASSWORD')
     db_name: str = Field(..., alias='POSTGRES_DB')
+    database_url: str | None = Field(default=None, alias='DATABASE_URL')
 
     @property
-    def database_url(self) -> str:
+    def db_url(self) -> str:
+        if self.database_url:
+            return self.database_url
         return f'postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}'
 
     model_config = SettingsConfigDict(
