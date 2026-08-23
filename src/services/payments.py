@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from src.db.uow import UnitOfWork
@@ -12,6 +13,7 @@ from src.domain.exceptions import (
     OrderNotFoundException,
     OverpaymentException,
     PaymentNotFoundException,
+    RefundNotAllowedException,
 )
 from src.integrations.bank.client import BankClient
 from src.integrations.bank.schemas import (
@@ -34,6 +36,15 @@ class PaymentService:
         else:
             order.payment_status = OrderPaymentStatus.PAID
 
+    @classmethod
+    def _confirm(cls, order, payment: Payment) -> None:
+        """Учесть платёж в заказе: деньги дошли."""
+
+        payment.status = PaymentStatus.PAID
+        payment.paid_at = datetime.now(UTC)
+        order.paid_amount += payment.amount
+        cls._update_order_payment_status(order)
+
     async def deposit(
         self,
         uow: UnitOfWork,
@@ -48,7 +59,11 @@ class PaymentService:
             if order is None:
                 raise OrderNotFoundException(order_id)
 
-            if order.paid_amount + amount > order.total_amount:
+            # незавершённый эквайринг ещё не в paid_amount, но деньги
+            # по нему уже обещаны — иначе заказ можно «оплатить» дважды
+            pending = await uow.payments.pending_amount(order_id)
+
+            if order.paid_amount + pending + amount > order.total_amount:
                 raise OverpaymentException()
 
             payment = Payment(
@@ -66,13 +81,12 @@ class PaymentService:
                 )
                 payment.bank_payment_id = bank_response.bank_payment_id
                 payment.bank_status = BankPaymentStatus.CREATED.value
+                # банк ещё не подтвердил оплату: заказ не трогаем
                 payment.status = PaymentStatus.PENDING
+            else:
+                self._confirm(order, payment)
 
             await uow.payments.add(payment)
-
-            order.paid_amount += amount
-
-            self._update_order_payment_status(order)
 
             return payment
 
@@ -88,6 +102,12 @@ class PaymentService:
             if payment is None:
                 raise PaymentNotFoundException(payment_id)
 
+            if payment.status != PaymentStatus.PAID:
+                raise RefundNotAllowedException(
+                    'Вернуть можно только оплаченный платёж, '
+                    f'текущий статус — {payment.status.value}'
+                )
+
             order = await uow.orders.get_by_id_for_update(payment.order_id)
 
             if order is None:
@@ -97,7 +117,9 @@ class PaymentService:
 
             self._update_order_payment_status(order)
 
-            await uow.session.delete(payment)
+            # платёж не удаляется: возврат — это событие в истории заказа,
+            # а не отсутствие платежа
+            payment.status = PaymentStatus.REFUNDED
 
             return payment
 
@@ -130,16 +152,19 @@ class PaymentService:
 
             payment.bank_status = bank_response.bank_status
 
-            if bank_response.bank_status == BankPaymentStatus.PAID.value:
-                payment.status = PaymentStatus.PAID
+            # повторная проверка уже учтённого платежа ничего не меняет
+            if payment.status != PaymentStatus.PENDING:
+                return payment
 
+            if bank_response.bank_status == BankPaymentStatus.PAID.value:
                 order = await uow.orders.get_by_id_for_update(payment.order_id)
 
                 if order is None:
                     raise OrderNotFoundException(payment.order_id)
 
-                order.paid_amount += payment.amount
+                self._confirm(order, payment)
 
-                self._update_order_payment_status(order)
+            elif bank_response.bank_status == BankPaymentStatus.FAILED.value:
+                payment.status = PaymentStatus.FAILED
 
             return payment

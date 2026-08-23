@@ -3,7 +3,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from src.domain.constants import AMOUNT_PRECISION, AMOUNT_SCALE, ORDER_ID_MIN
-from src.domain.enums import PaymentType
+from src.domain.enums import PaymentStatus, PaymentType
 
 
 class PaymentBase(BaseModel):
@@ -32,6 +32,8 @@ class PaymentCreate(PaymentBase):
 
 class PaymentResponse(PaymentBase):
     id: int = Field(examples=[1])
+    status: PaymentStatus = Field(examples=[PaymentStatus.PAID])
+    bank_payment_id: str | None = Field(default=None, examples=[None])
 
     @field_serializer('amount')
     def serialize_amount(self, value: Decimal) -> str:
