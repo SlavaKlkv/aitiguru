@@ -1,6 +1,9 @@
-from sqlalchemy import select
+from decimal import Decimal
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.enums import PaymentStatus
 from src.models.payment import Payment
 
 
@@ -23,3 +26,13 @@ class PaymentRepository:
             select(Payment).where(Payment.order_id == order_id)
         )
         return list(result.scalars().all())
+
+    async def pending_amount(self, order_id: int) -> Decimal:
+        """Сумма платежей заказа, ожидающих подтверждения банком."""
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                Payment.order_id == order_id,
+                Payment.status == PaymentStatus.PENDING,
+            )
+        )
+        return Decimal(str(result.scalar_one()))

@@ -1,7 +1,7 @@
 [project]
-name = "aitiguru"
+name = "payments"
 version = "0.1.0"
-description = "Add your description here"
+description = "Сервис оплаты заказов: несколько платежей на заказ, эквайринг и возвраты"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -31,11 +31,18 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.13"
+plugins = ["pydantic.mypy"]
 
 [dependency-groups]
 dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0"
+    "pytest-asyncio>=0.23.0",
+    "aiosqlite>=0.20.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -10,16 +10,21 @@ from src.repos.payment import PaymentRepository
 
 
 class UnitOfWork:
-    """Реализация паттерна Unit of Work поверх AsyncSession."""
+    """Реализация паттерна Unit of Work поверх AsyncSession.
+
+    Атрибуты появляются при входе в контекст: вне `async with` объект
+    бесполезен, поэтому и репозиториев у него нет.
+    """
+
+    session: AsyncSession
+    orders: OrderRepository
+    payments: PaymentRepository
 
     def __init__(
         self,
         session_factory: Callable[[], AsyncSession] = SessionFactory,
     ) -> None:
         self._session_factory = session_factory
-        self.session: AsyncSession | None = None
-        self.orders: OrderRepository | None = None
-        self.payments: PaymentRepository | None = None
 
     async def __aenter__(self) -> UnitOfWork:
         self.session = self._session_factory()
@@ -28,7 +33,6 @@ class UnitOfWork:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        assert self.session is not None
         try:
             if exc_type is None:
                 await self.session.commit()

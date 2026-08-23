@@ -1,5 +1,7 @@
 # Payments
 
+[![CI](https://img.shields.io/github/actions/workflow/status/SlavaKlkv/payments/ci.yml?style=flat-square&label=CI)](../../actions)
+
 Сервис оплаты заказов. Заказ можно закрыть одним платежом или десятью,
 наличными или картой, часть денег вернуть — и в любой момент сказать, сколько
 по заказу реально оплачено.
@@ -20,7 +22,13 @@
 
 Сам платёж живёт своей жизнью: `CREATED → PENDING → PAID`, плюс терминальные
 `REFUNDED` и `FAILED`. Наличные (`CASH`) закрываются сразу, эквайринг
-(`ACQUIRING`) уходит в `PENDING` и ждёт банк.
+(`ACQUIRING`) уходит в `PENDING` и ждёт банк — и до подтверждения банком он
+**не** попадает в `paid_amount`. При этом «зависший» эквайринг всё равно
+занимает сумму заказа, иначе один и тот же заказ можно было бы оплатить дважды.
+
+Возврат не удаляет платёж, а переводит его в `REFUNDED`: возврат — событие в
+истории заказа, а не отсутствие платежа. Вернуть можно только оплаченный
+платёж и только один раз.
 
 ## Слои
 
@@ -83,24 +91,42 @@ uv run uvicorn src.main:app --reload --port 8000
 Новая миграция после правки моделей:
 `uv run alembic revision --autogenerate -m "..."`.
 
+## Проверки
+
+```bash
+uv run pytest          # тесты
+uv run ruff check .    # линтер
+uv run mypy src        # типы
+```
+
+Тесты гоняются на in-memory SQLite, поэтому Postgres для них поднимать не
+нужно. Покрыты сценарии оплаты (частичная, полная, несколько платежей,
+переплата), эквайринга (ожидание банка, подтверждение, повторная сверка) и
+возвратов (частичный, повторный, возврат неоплаченного). Те же проверки плюс
+`ruff` и `mypy` гоняет [CI](.github/workflows/ci.yml) на каждый push и PR.
+
+Чего тесты не проверяют: блокировку строки `SELECT … FOR UPDATE` — SQLite её
+игнорирует. Для этого нужен Postgres, и это следующий шаг.
+
 ## Эндпоинты
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |
-| `POST` | `/orders/` | создать заказ |
-| `GET` | `/orders/{order_id}` | заказ с текущим статусом оплаты |
-| `POST` | `/payments/` | платёж по заказу: `CASH` или `ACQUIRING` |
-| `POST` | `/payments/{payment_id}/refund` | возврат |
-| `POST` | `/payments/{payment_id}/check` | спросить банк о статусе и синхронизировать |
+| `POST` | `/api/orders/` | создать заказ |
+| `GET` | `/api/orders/{order_id}` | заказ с текущим статусом оплаты |
+| `POST` | `/api/payments/` | платёж по заказу: `CASH` или `ACQUIRING` |
+| `POST` | `/api/payments/{payment_id}/refund` | возврат |
+| `POST` | `/api/payments/{payment_id}/check` | спросить банк о статусе и синхронизировать |
+| `GET` | `/health` | healthcheck |
 
 ```bash
 # заказ на 1000
-curl -sX POST http://127.0.0.1:8000/orders/ \
+curl -sX POST http://127.0.0.1:8000/api/orders/ \
   -H 'Content-Type: application/json' \
   -d '{"total_amount": "1000.00"}'
 
 # 400 наличными — заказ станет PARTIALLY_PAID
-curl -sX POST http://127.0.0.1:8000/payments/ \
+curl -sX POST http://127.0.0.1:8000/api/payments/ \
   -H 'Content-Type: application/json' \
   -d '{"order_id": 1, "amount": "400.00", "payment_type": "CASH"}'
 ```
